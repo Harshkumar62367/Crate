@@ -384,10 +384,10 @@ export function makeAskMyFiles(): ModelContextTool {
     name: "ask_my_files",
     title: "Ask a question across all files",
     description:
-      "One-shot question answering over the whole Crate: searches, pulls the most relevant " +
-      "passages, and returns an answer assembled ONLY from those passages, with inline " +
-      "[doc name] citations and a source list. Prefer the lower-level tools " +
-      "(search_documents, open_document, cite_source) when step-by-step transparency matters.",
+      "One-shot question answering over the whole Crate: searches, and either answers ordinal " +
+      "questions directly from numbered lists found in the files (e.g. 'the first of the 16 tests'), " +
+      "or returns the most relevant passages, with citations and a source list. Prefer the lower-level " +
+      "tools (search_documents, open_document, cite_source) when step-by-step transparency matters.",
     inputSchema: {
       type: "object",
       properties: {
@@ -401,31 +401,16 @@ export function makeAskMyFiles(): ModelContextTool {
       try {
         ok(tool, input);
         const question = String(input.question ?? "");
-        const hits = await searchDocuments(question, 6);
         signal.throwIfAborted();
-        const byDoc = new Map<string, SearchHit[]>();
-        for (const h of hits) {
-          const list = byDoc.get(h.docId) ?? [];
-          list.push(h);
-          byDoc.set(h.docId, list);
-        }
-        const sources: Array<{ doc: string; snippet: string }> = [];
-        const topDocId = hits[0]?.docId;
-        for (const [docId, docHits] of byDoc) {
-          const doc = (await listDocs()).find((d) => d.id === docId);
-          if (!doc) continue;
-          if (docId === topDocId) {
-            // Ring the best source in the viewer so the user sees the anchor.
-            emitCite({ docId, docName: doc.name, quote: docHits[0].snippet, note: `Answering: ${question}` });
-          }
-          for (const h of docHits.slice(0, 2)) sources.push({ doc: doc.name, snippet: h.snippet });
-        }
-        const answer = sources.length
-          ? `Based on your files, the most relevant passages for “${question}” are:\n\n` +
-            sources.map((s, i) => `${i + 1}. [${s.doc}] ${s.snippet}`).join("\n")
-          : `None of the ${await docCount()} indexed documents mention that. Try different wording, or index more files.`;
-        logActivity({ tool, input, status: "ok", detail: `${sources.length} passages` });
-        return JSON.stringify({ answer, sources });
+        const { composeAskAnswer } = await import("./answer");
+        const result = await composeAskAnswer(question);
+        logActivity({
+          tool,
+          input,
+          status: "ok",
+          detail: `${result.sources.length} sources (${result.mode})`,
+        });
+        return JSON.stringify({ answer: result.answer, sources: result.sources });
       } catch (err) {
         return fail(tool, input, err);
       }

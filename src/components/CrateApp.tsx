@@ -9,7 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DocumentViewer from "./DocumentViewer";
 import AgentActivity from "./AgentActivity";
 import WebmcpBadge from "./WebmcpBadge";
-import { EVENTS, emitCite, on } from "@/lib/bus";
+import { EVENTS, on } from "@/lib/bus";
+import { composeAskAnswer } from "@/lib/answer";
 import { clearAll, listDocs } from "@/lib/filestore";
 import { ingestDrop, removeDoc } from "@/lib/ingest";
 import { initWebMCP, syncWebMCPTools } from "@/lib/webmcp";
@@ -139,40 +140,8 @@ export default function CrateApp() {
     e.currentTarget.reset();
     setAnswer("Searching your files…");
     try {
-      const results = await searchDocuments(question, 6);
-      if (results.length === 0) {
-        const docsNow = await listDocs();
-        const textless = docsNow.filter((d) => !d.text.trim()).length;
-        setAnswer(
-          docsNow.length === 0
-            ? "Your Crate is empty — drop a folder first."
-            : textless === docsNow.length
-              ? `None of your ${docsNow.length} files contain searchable text (they may be images whose text OCR could not read, or binary files). Try different wording, or drop in text-based files.`
-              : "Nothing in your Crate matches that. Try different wording, or drop in more files.",
-        );
-        return;
-      }
-      const byDoc = new Map<string, SearchHit[]>();
-      for (const h of results) {
-        const list = byDoc.get(h.docId) ?? [];
-        list.push(h);
-        byDoc.set(h.docId, list);
-      }
-      const lines: string[] = [];
-      const topDocId = results[0].docId;
-      let i = 0;
-      for (const [docId, docHits] of byDoc) {
-        const docName = docHits[0].docName;
-        if (docId === topDocId) {
-          // Ring the best source in the viewer; the rest stay as inline citations.
-          emitCite({ docId, docName, quote: docHits[0].snippet, note: `Answering: ${question}` });
-        }
-        for (const h of docHits.slice(0, 2)) {
-          i++;
-          lines.push(`${i}. [${docName}] ${h.snippet}`);
-        }
-      }
-      setAnswer(lines.join("\n\n"));
+      const { answer } = await composeAskAnswer(question);
+      setAnswer(answer);
     } catch (err) {
       setAnswer(`Search failed: ${String(err)}`);
     }

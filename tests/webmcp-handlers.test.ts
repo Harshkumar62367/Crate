@@ -173,7 +173,7 @@ describe("ask_my_files handler", () => {
     await seedDoc({ name: "a.txt", text: "gardening tips for spring" });
     const tool = makeAskMyFiles();
     const out = JSON.parse(await tool.execute({ question: "quantum chromodynamics" }, { signal: signal() }));
-    expect(out.answer).toContain("None of the 1 indexed documents");
+    expect(out.answer).toContain("Nothing in your Crate matches that");
     expect(out.sources).toHaveLength(0);
   });
 });

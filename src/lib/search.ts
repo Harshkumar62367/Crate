@@ -18,7 +18,17 @@ export function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 1 && !STOP.has(t))
+    .map(stemToken)
     .filter((t) => t.length > 1 && !STOP.has(t));
+}
+
+/** Light stemming: plurals and possessives fold onto their singular form. */
+function stemToken(token: string): string {
+  let t = token;
+  if (t.length > 3 && t.endsWith("'s")) t = t.slice(0, -2);
+  if (t.length > 3 && t.endsWith("s") && !t.endsWith("ss") && !t.endsWith("us")) t = t.slice(0, -1);
+  return t;
 }
 
 interface Bm25Index {
